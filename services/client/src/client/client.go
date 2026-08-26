@@ -3,6 +3,8 @@ package client
 import (
 	"net"
 	"time"
+	"os"
+	"bufio"
 
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/logger"
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/safe_socket"
@@ -19,6 +21,8 @@ type ClientConfig struct {
 	ServerHost string
 	ServerPort string
 	AgencyId   string
+	InputFile  string
+	OutputFile string
 }
 
 type Client struct {
@@ -62,30 +66,59 @@ func (client *Client) Run() error {
 	const mainAction = "test-echo-server"
 	defer client.conn.Close()
 
-	for messageId := range ECHO_CLIENT_MESSAGE_AMOUNT {
-		messageArgs := []any{"agency-id", client.config.AgencyId, "message-id", messageId}
-		logger.Info(mainAction, logger.InProgress, messageArgs...)
+	file, err := os.Open(client.config.InputFile)
+	if err != nil {
+		logger.Error(mainAction, logger.Fail, "agency-id", client.config.AgencyId)
+		return err
+	}
 
-		clientMessage := client.config.AgencyId
+	scanner := bufio.NewScanner(file)
 
-		if err := safe_socket.SendAll(client.conn, []byte(clientMessage)); err != nil {
-			logger.Error("send-message", logger.Fail, messageArgs...)
+	for scanner.Scan() {
+		//messageArgs := []any{"agency-id", client.config.AgencyId, "message-id", messageId}
+		line := scanner.Text()
+
+		if err := safe_socket.SendAll(client.conn, []byte(line)); err != nil {
+			//logger.Error("send-message", logger.Fail, messageArgs...)
 			return err
 		}
 
 		responseBuffer, err := safe_socket.RecvAll(client.conn, ECHO_CLIENT_BUFFER_SIZE)
 		if err != nil {
-			logger.Error("recv-response", logger.Fail, messageArgs...)
+			//logger.Error("recv-response", logger.Fail, messageArgs...)
 			return err
 		}
 
-		if string(responseBuffer) != clientMessage {
-			logger.Error("check-response", logger.Fail, messageArgs...)
+		if string(responseBuffer) != line {
+			//logger.Error("check-response", logger.Fail, messageArgs...)
 			return err
 		}
-
-		time.Sleep(ECHO_CLIENT_MESSAGE_DELAY_MS * time.Millisecond)
 	}
+
+	// for messageId := range ECHO_CLIENT_MESSAGE_AMOUNT {
+	// 	messageArgs := []any{"agency-id", client.config.AgencyId, "message-id", messageId}
+	// 	logger.Info(mainAction, logger.InProgress, messageArgs...)
+
+	// 	clientMessage := client.config.AgencyId
+
+	// 	if err := safe_socket.SendAll(client.conn, []byte(clientMessage)); err != nil {
+	// 		logger.Error("send-message", logger.Fail, messageArgs...)
+	// 		return err
+	// 	}
+
+	// 	responseBuffer, err := safe_socket.RecvAll(client.conn, ECHO_CLIENT_BUFFER_SIZE)
+	// 	if err != nil {
+	// 		logger.Error("recv-response", logger.Fail, messageArgs...)
+	// 		return err
+	// 	}
+
+	// 	if string(responseBuffer) != clientMessage {
+	// 		logger.Error("check-response", logger.Fail, messageArgs...)
+	// 		return err
+	// 	}
+
+	// 	time.Sleep(ECHO_CLIENT_MESSAGE_DELAY_MS * time.Millisecond)
+	// }
 	logger.Info(mainAction, logger.Success, "agency-id", client.config.AgencyId)
 
 	return nil

@@ -1,5 +1,7 @@
 services:
   server:
+    ports:
+      - 5678:5678
     build:
       context: ./services/server
       dockerfile: Dockerfile
@@ -10,6 +12,9 @@ services:
       - SERVER_PORT=5678
 
   client_0:
+    volumes:
+      - ./input:/app/input
+      - ./output:/app/output
     build:
       context: ./services/client
       dockerfile: Dockerfile
@@ -20,3 +25,90 @@ services:
       - AGENCY_ID=0
       - SERVER_HOST=server
       - SERVER_PORT=5678
+      - INPUT_FILE=/app/input/input-0.csv
+      - OUTPUT_FILE=/app/output/output_0.csv
+  
+  client_1:
+    volumes:
+      - ./input:/app/input
+      - ./output:/app/output
+    build:
+      context: ./services/client
+      dockerfile: Dockerfile
+    container_name: client_1
+    depends_on:
+      - server
+    environment:
+      - AGENCY_ID=1
+      - SERVER_HOST=server
+      - SERVER_PORT=5678
+      - INPUT_FILE=/app/input/input-1.csv
+      - OUTPUT_FILE=/app/output/output_1.csv
+
+  client_2:
+    volumes:
+      - ./input:/app/input
+      - ./output:/app/output
+    build:
+      context: ./services/client
+      dockerfile: Dockerfile
+    container_name: client_2
+    depends_on:
+      - server
+    environment:
+      - AGENCY_ID=2
+      - SERVER_HOST=server
+      - SERVER_PORT=5678
+      - INPUT_FILE=/app/input/input-2.csv
+      - OUTPUT_FILE=/app/output/output_2.csv
+
+  client_3:
+    volumes:
+      - ./input:/app/input
+      - ./output:/app/output
+    build:
+      context: ./services/client
+      dockerfile: Dockerfile
+    container_name: client_3
+    depends_on:
+      - server
+    environment:
+      - AGENCY_ID=3
+      - SERVER_HOST=server
+      - SERVER_PORT=5678
+      - INPUT_FILE=/app/input/input-3.csv
+      - OUTPUT_FILE=/app/output/output_3.csv
+
+  client_4:
+    volumes:
+      - ./input:/app/input
+      - ./output:/app/output
+    build:
+      context: ./services/client
+      dockerfile: Dockerfile
+    container_name: client_4
+    depends_on:
+      - server
+    environment:
+      - AGENCY_ID=4
+      - SERVER_HOST=server
+      - SERVER_PORT=5678
+      - INPUT_FILE=/app/input/input-4.csv
+      - OUTPUT_FILE=/app/output/output_4.csv
+
+  client_5:
+    volumes:
+      - ./input:/app/input
+      - ./output:/app/output
+    build:
+      context: ./services/client
+      dockerfile: Dockerfile
+    container_name: client_5
+    depends_on:
+      - server
+    environment:
+      - AGENCY_ID=5
+      - SERVER_HOST=server
+      - SERVER_PORT=5678
+      - INPUT_FILE=/app/input/input-5.csv
+      - OUTPUT_FILE=/app/output/output_5.csv
