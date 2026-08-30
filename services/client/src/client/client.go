@@ -66,34 +66,46 @@ func (client *Client) Run() error {
 	const mainAction = "test-echo-server"
 	defer client.conn.Close()
 
-	file, err := os.Open(client.config.InputFile)
+	file_input, err := os.Open(client.config.InputFile)
 	if err != nil {
 		logger.Error(mainAction, logger.Fail, "agency-id", client.config.AgencyId)
 		return err
 	}
 
-	scanner := bufio.NewScanner(file)
+	file_output, err := os.Create(client.config.OutputFile)
+	if err != nil {
+		logger.Error(mainAction, logger.Fail, "agency-id", client.config.AgencyId)
+		return err
+	}
+
+	scanner := bufio.NewScanner(file_input)
 
 	for scanner.Scan() {
-		//messageArgs := []any{"agency-id", client.config.AgencyId, "message-id", messageId}
 		line := scanner.Text()
+		messageArgs := []any{"agency-id", client.config.AgencyId, "message-id", line}
 
 		if err := safe_socket.SendAll(client.conn, []byte(line)); err != nil {
-			//logger.Error("send-message", logger.Fail, messageArgs...)
+			logger.Error("send-message", logger.Fail, messageArgs...)
 			return err
 		}
 
 		responseBuffer, err := safe_socket.RecvAll(client.conn, ECHO_CLIENT_BUFFER_SIZE)
 		if err != nil {
-			//logger.Error("recv-response", logger.Fail, messageArgs...)
+			logger.Error("recv-response", logger.Fail, messageArgs...)
 			return err
 		}
 
 		if string(responseBuffer) != line {
-			//logger.Error("check-response", logger.Fail, messageArgs...)
+			logger.Error("check-response", logger.Fail, messageArgs...)
 			return err
 		}
+
+		file_output.WriteString(string(responseBuffer) + "\n")
+
 	}
+
+	file_output.Close()
+	file_input.Close()
 
 	// for messageId := range ECHO_CLIENT_MESSAGE_AMOUNT {
 	// 	messageArgs := []any{"agency-id", client.config.AgencyId, "message-id", messageId}

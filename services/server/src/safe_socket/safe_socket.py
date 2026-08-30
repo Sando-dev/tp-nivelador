@@ -4,8 +4,16 @@ import socket
 
 
 def recv_all(socket: socket.socket, size):
-    return socket.recv(size)
+    data = b""
+    while len(data) < size:
+        data2 = socket.recv(size - len(data))
+        if data2 == b"":
+            break
+        data += data2
+    return data
 
 
 def send_all(socket: socket.socket, bytes):
     return socket.send(bytes)
+
+
