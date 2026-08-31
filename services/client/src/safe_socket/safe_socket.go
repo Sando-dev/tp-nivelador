@@ -28,7 +28,7 @@ func ShortRead(socket io.Reader, size int) ([]byte, error) {
 			return nil, err
 		}
 		if n == 0 {
-			return io.ErrUnexpectedEOF
+			return nil, io.ErrUnexpectedEOF
 		}
 		received += n
 	}

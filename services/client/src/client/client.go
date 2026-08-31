@@ -4,10 +4,15 @@ import (
 	"net"
 	"time"
 	"os"
-	"bufio"
+	"io"
+	"encoding/csv"
+	"strconv"
+	"strings"
 
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/logger"
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/safe_socket"
+	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/bet"
+	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/protocol"
 )
 
 const CONNECTION_ATTEMPTS_MAX = 3
@@ -20,7 +25,7 @@ const ECHO_CLIENT_MESSAGE_DELAY_MS = 1000
 type ClientConfig struct {
 	ServerHost string
 	ServerPort string
-	AgencyId   string
+	AgencyId   int
 	InputFile  string
 	OutputFile string
 }
@@ -71,20 +76,50 @@ func (client *Client) Run() error {
 		logger.Error(mainAction, logger.Fail, "agency-id", client.config.AgencyId)
 		return err
 	}
+	defer file_input.Close()
 
 	file_output, err := os.Create(client.config.OutputFile)
 	if err != nil {
 		logger.Error(mainAction, logger.Fail, "agency-id", client.config.AgencyId)
 		return err
 	}
+	defer file_output.Close()
 
-	scanner := bufio.NewScanner(file_input)
+	reader := csv.NewReader(file_input)
 
-	for scanner.Scan() {
-		line := scanner.Text()
-		messageArgs := []any{"agency-id", client.config.AgencyId, "message-id", line}
+	for {
+		row, err := reader.Read()
 
-		if err := safe_socket.SendAll(client.conn, []byte(line)); err != nil {
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		dni, err := strconv.Atoi(row[2])
+		if err != nil {
+			logger.Error("parse-dni", logger.Fail, "agency-id", client.config.AgencyId, "row", row)
+			return err
+		}
+
+		amount, err := strconv.Atoi(row[4])
+		if err != nil {
+			logger.Error("parse-amount", logger.Fail, "agency-id", client.config.AgencyId, "row", row)
+			return err
+		}
+
+		newBet := bet.NewBet(client.config.AgencyId, row[0], row[1], dni, row[3], amount)
+		packet := protocol.SerializeBet(newBet)
+
+		println("Bet created:", newBet)
+		println("Serialized packet:", packet)
+
+		messageArgs := []any{"agency-id", client.config.AgencyId, "message-id", row}
+
+		rowString := strings.Join(row, ",")
+
+		if err := safe_socket.SendAll(client.conn, []byte(rowString)); err != nil {
 			logger.Error("send-message", logger.Fail, messageArgs...)
 			return err
 		}
@@ -95,7 +130,7 @@ func (client *Client) Run() error {
 			return err
 		}
 
-		if string(responseBuffer) != line {
+		if string(responseBuffer) != rowString {
 			logger.Error("check-response", logger.Fail, messageArgs...)
 			return err
 		}
@@ -104,33 +139,6 @@ func (client *Client) Run() error {
 
 	}
 
-	file_output.Close()
-	file_input.Close()
-
-	// for messageId := range ECHO_CLIENT_MESSAGE_AMOUNT {
-	// 	messageArgs := []any{"agency-id", client.config.AgencyId, "message-id", messageId}
-	// 	logger.Info(mainAction, logger.InProgress, messageArgs...)
-
-	// 	clientMessage := client.config.AgencyId
-
-	// 	if err := safe_socket.SendAll(client.conn, []byte(clientMessage)); err != nil {
-	// 		logger.Error("send-message", logger.Fail, messageArgs...)
-	// 		return err
-	// 	}
-
-	// 	responseBuffer, err := safe_socket.RecvAll(client.conn, ECHO_CLIENT_BUFFER_SIZE)
-	// 	if err != nil {
-	// 		logger.Error("recv-response", logger.Fail, messageArgs...)
-	// 		return err
-	// 	}
-
-	// 	if string(responseBuffer) != clientMessage {
-	// 		logger.Error("check-response", logger.Fail, messageArgs...)
-	// 		return err
-	// 	}
-
-	// 	time.Sleep(ECHO_CLIENT_MESSAGE_DELAY_MS * time.Millisecond)
-	// }
 	logger.Info(mainAction, logger.Success, "agency-id", client.config.AgencyId)
 
 	return nil
