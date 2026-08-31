@@ -1,6 +1,9 @@
 import socket
 import logger
 import safe_socket
+import protocol
+import bet
+import lottery
 
 _ECHO_SERVER_MESSAGE_SIZE = 1024
 
@@ -13,13 +16,23 @@ class Server:
     def _handle_client(self, client_socket):
         action = "handle-client"
         message_amount = 0
+        message_type = protocol.MessageType.BET
+        list_of_bets = []
+        
         try:
             logger.info(action, logger.LogResult.in_progress)
-            while True:
-                client_message = safe_socket.recv_all(
-                    client_socket, _ECHO_SERVER_MESSAGE_SIZE
-                )
-                if not client_message:
+            while message_type == protocol.MessageType.BET:
+                message_type, payload = protocol.receive_message(client_socket)
+                if message_type == protocol.MessageType.BET:
+                    bet = protocol.deserialize_bet(payload)
+                    logger.info(
+                        action,
+                        logger.LogResult.success,
+                        "bet",
+                        bet,
+                    )
+
+                elif message_type == protocol.MessageType.FINISH:
                     logger.info(
                         action,
                         logger.LogResult.success,
@@ -27,13 +40,15 @@ class Server:
                         message_amount,
                     )
                     return
-                message_amount += 1
-                safe_socket.send_all(client_socket, client_message)
+                
+
+
         except Exception as e:
             logger.error(
                 action, logger.LogResult.fail, "messages-amount", message_amount
             )
             raise e
+        
 
     def run(self):
         action = "accept-connection"

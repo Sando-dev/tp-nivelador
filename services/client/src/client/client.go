@@ -7,7 +7,6 @@ import (
 	"io"
 	"encoding/csv"
 	"strconv"
-	"strings"
 
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/logger"
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/safe_socket"
@@ -97,19 +96,19 @@ func (client *Client) Run() error {
 			return err
 		}
 
-		dni, err := strconv.Atoi(row[2])
+		documentation, err := strconv.Atoi(row[2])
 		if err != nil {
-			logger.Error("parse-dni", logger.Fail, "agency-id", client.config.AgencyId, "row", row)
+			logger.Error("parse-documentation", logger.Fail, "agency-id", client.config.AgencyId, "row", row)
 			return err
 		}
 
-		amount, err := strconv.Atoi(row[4])
+		number, err := strconv.Atoi(row[4])
 		if err != nil {
-			logger.Error("parse-amount", logger.Fail, "agency-id", client.config.AgencyId, "row", row)
+			logger.Error("parse-number", logger.Fail, "agency-id", client.config.AgencyId, "row", row)
 			return err
 		}
 
-		newBet := bet.NewBet(client.config.AgencyId, row[0], row[1], dni, row[3], amount)
+		newBet := bet.NewBet(client.config.AgencyId, row[0], row[1], documentation, row[3], number)
 		packet := protocol.SerializeBet(newBet)
 
 		println("Bet created:", newBet)
@@ -117,26 +116,16 @@ func (client *Client) Run() error {
 
 		messageArgs := []any{"agency-id", client.config.AgencyId, "message-id", row}
 
-		rowString := strings.Join(row, ",")
-
-		if err := safe_socket.SendAll(client.conn, []byte(rowString)); err != nil {
+		if err := safe_socket.SendAll(client.conn, packet); err != nil {
 			logger.Error("send-message", logger.Fail, messageArgs...)
 			return err
 		}
 
-		responseBuffer, err := safe_socket.RecvAll(client.conn, ECHO_CLIENT_BUFFER_SIZE)
-		if err != nil {
-			logger.Error("recv-response", logger.Fail, messageArgs...)
-			return err
-		}
+	}
 
-		if string(responseBuffer) != rowString {
-			logger.Error("check-response", logger.Fail, messageArgs...)
-			return err
-		}
-
-		file_output.WriteString(string(responseBuffer) + "\n")
-
+	if err := safe_socket.SendAll(client.conn, protocol.SerializeFinish()); err != nil {
+		logger.Error("send-finish", logger.Fail, "agency-id", client.config.AgencyId)
+		return err
 	}
 
 	logger.Info(mainAction, logger.Success, "agency-id", client.config.AgencyId)
