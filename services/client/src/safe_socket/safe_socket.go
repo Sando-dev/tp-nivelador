@@ -4,16 +4,19 @@ import "io"
 
 //TODO: Complete with a short-read/short-write tolerant implementation
 
-func ShortWrite(socket io.Writer, bytes []byte) (int, error) {
+func ShortWrite(socket io.Writer, bytes []byte) error {
 	sent := 0
 	for sent < len(bytes) {
-		n, err = socket.Write(bytes[sent:])
+		n, err := socket.Write(bytes[sent:])
 		if err != nil {
-			return sent, err
+			return err
+		}
+		if n == 0 {
+			return io.ErrUnexpectedEOF
 		}
 		sent += n
 	}	
-	return sent, nil
+	return  nil
 }
 
 func ShortRead(socket io.Reader, size int) ([]byte, error) {
@@ -23,6 +26,9 @@ func ShortRead(socket io.Reader, size int) ([]byte, error) {
 		n, err := socket.Read(buff[received:size])
 		if err != nil {
 			return nil, err
+		}
+		if n == 0 {
+			return io.ErrUnexpectedEOF
 		}
 		received += n
 	}
