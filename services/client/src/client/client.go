@@ -70,65 +70,128 @@ func (client *Client) Run() error {
 	const mainAction = "test-echo-server"
 	defer client.conn.Close()
 
-	file_input, err := os.Open(client.config.InputFile)
+	inputFile, err := os.Open(client.config.InputFile)
 	if err != nil {
 		logger.Error(mainAction, logger.Fail, "agency-id", client.config.AgencyId)
 		return err
 	}
-	defer file_input.Close()
+	defer inputFile.Close()
 
-	file_output, err := os.Create(client.config.OutputFile)
+	outputFile, err := os.Create(client.config.OutputFile)
 	if err != nil {
 		logger.Error(mainAction, logger.Fail, "agency-id", client.config.AgencyId)
 		return err
 	}
-	defer file_output.Close()
+	defer outputFile.Close()
 
-	reader := csv.NewReader(file_input)
+	reader := csv.NewReader(inputFile)
+	writer := csv.NewWriter(outputFile)
+	defer writer.Flush()
 
+	if err := client.sendBets(reader); err != nil {
+		return err
+	}
+
+	if err := safe_socket.SendAll(
+		client.conn,
+		protocol.SerializeFinish(),
+	); err != nil {
+		return err
+	}
+
+	if err := client.receiveWinners(writer); err != nil {
+		return err
+	}
+
+	logger.Info(
+		mainAction,
+		logger.Success,
+		"agency-id",
+		client.config.AgencyId,
+	)
+
+
+	return nil
+}
+
+
+func (client *Client) sendBets(reader *csv.Reader) error {
 	for {
 		row, err := reader.Read()
 
 		if err == io.EOF {
-			break
+			return nil
 		}
+
 		if err != nil {
 			return err
 		}
 
-		documentation, err := strconv.Atoi(row[2])
+		newBet, err := client.betFromRow(row)
 		if err != nil {
-			logger.Error("parse-documentation", logger.Fail, "agency-id", client.config.AgencyId, "row", row)
 			return err
 		}
 
-		number, err := strconv.Atoi(row[4])
-		if err != nil {
-			logger.Error("parse-number", logger.Fail, "agency-id", client.config.AgencyId, "row", row)
-			return err
-		}
-
-		newBet := bet.NewBet(client.config.AgencyId, row[0], row[1], documentation, row[3], number)
 		packet := protocol.SerializeBet(newBet)
 
-		println("Bet created:", newBet)
-		println("Serialized packet:", packet)
-
-		messageArgs := []any{"agency-id", client.config.AgencyId, "message-id", row}
-
 		if err := safe_socket.SendAll(client.conn, packet); err != nil {
-			logger.Error("send-message", logger.Fail, messageArgs...)
+			return err
+		}
+	}
+}
+
+
+func (client *Client) betFromRow(row []string) (*bet.Bet, error) {
+	documentation, err := strconv.Atoi(row[2])
+	if err != nil {
+		return nil, err
+	}
+
+	number, err := strconv.Atoi(row[4])
+	if err != nil {
+		return nil, err
+	}
+
+	return bet.NewBet(
+		client.config.AgencyId,
+		row[0],
+		row[1],
+		documentation,
+		row[3],
+		number,
+	), nil
+}
+
+
+func (client *Client) receiveWinners(writer *csv.Writer) error {
+	for {
+		messageType, payload, err := protocol.ReceiveMessage(client.conn)
+		if err != nil {
 			return err
 		}
 
+		if messageType == protocol.MessageFinish {
+			return nil
+		}
+
+		if messageType != protocol.MessageWinners {
+			continue
+		}
+
+		winner, err := protocol.DeserializeBet(payload)
+		if err != nil {
+			return err
+		}
+
+		if err := writer.Write([]string{
+			strconv.Itoa(winner.AgencyId),
+			winner.Name,
+			winner.LastName,
+			strconv.Itoa(winner.Documentation),
+			winner.Birthday,
+			strconv.Itoa(winner.Number),
+		}); err != nil {
+			return err
+		}
 	}
-
-	if err := safe_socket.SendAll(client.conn, protocol.SerializeFinish()); err != nil {
-		logger.Error("send-finish", logger.Fail, "agency-id", client.config.AgencyId)
-		return err
-	}
-
-	logger.Info(mainAction, logger.Success, "agency-id", client.config.AgencyId)
-
-	return nil
 }

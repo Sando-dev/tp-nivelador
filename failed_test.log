@@ -1,0 +1,44 @@
+client_2  | 2026/09/05 21:34:03 INFO action=connect-to-server result=in-progress
+client_2  | 2026/09/05 21:34:03 WARN action=connect-to-server result=fail attempt=0
+client_2  | 2026/09/05 21:34:03 WARN action=connect-to-server result=fail attempt=1
+client_2  | 2026/09/05 21:34:03 WARN action=connect-to-server result=fail attempt=2
+client_2  | 2026/09/05 21:34:03 WARN action=connect-to-server result=fail
+client_2  | 2026/09/05 21:34:03 ERROR action=client-new result=fail err="dial tcp 172.19.0.2:5678: connect: connection refused"
+client_5  | 2026/09/05 21:34:03 INFO action=connect-to-server result=in-progress
+client_5  | 2026/09/05 21:34:03 WARN action=connect-to-server result=fail attempt=0
+client_5  | 2026/09/05 21:34:03 WARN action=connect-to-server result=fail attempt=1
+client_5  | 2026/09/05 21:34:03 WARN action=connect-to-server result=fail attempt=2
+client_5  | 2026/09/05 21:34:03 WARN action=connect-to-server result=fail
+client_5  | 2026/09/05 21:34:03 ERROR action=client-new result=fail err="dial tcp 172.19.0.2:5678: connect: connection refused"
+client_3  | 2026/09/05 21:34:03 INFO action=connect-to-server result=in-progress
+client_3  | 2026/09/05 21:34:03 WARN action=connect-to-server result=fail attempt=0
+client_3  | 2026/09/05 21:34:03 WARN action=connect-to-server result=fail attempt=1
+client_3  | 2026/09/05 21:34:03 WARN action=connect-to-server result=fail attempt=2
+client_3  | 2026/09/05 21:34:03 WARN action=connect-to-server result=fail
+client_3  | 2026/09/05 21:34:03 ERROR action=client-new result=fail err="dial tcp 172.19.0.2:5678: connect: connection refused"
+client_0  | 2026/09/05 21:34:02 INFO action=connect-to-server result=in-progress
+client_0  | 2026/09/05 21:34:02 WARN action=connect-to-server result=fail attempt=0
+client_0  | 2026/09/05 21:34:02 WARN action=connect-to-server result=fail attempt=1
+client_0  | 2026/09/05 21:34:03 WARN action=connect-to-server result=fail attempt=2
+client_0  | 2026/09/05 21:34:03 WARN action=connect-to-server result=fail
+client_0  | 2026/09/05 21:34:03 ERROR action=client-new result=fail err="dial tcp 172.19.0.2:5678: connect: connection refused"
+client_1  | 2026/09/05 21:34:03 INFO action=connect-to-server result=in-progress
+client_1  | 2026/09/05 21:34:03 WARN action=connect-to-server result=fail attempt=0
+client_1  | 2026/09/05 21:34:03 WARN action=connect-to-server result=fail attempt=1
+client_1  | 2026/09/05 21:34:03 WARN action=connect-to-server result=fail attempt=2
+client_1  | 2026/09/05 21:34:03 WARN action=connect-to-server result=fail
+client_1  | 2026/09/05 21:34:03 ERROR action=client-new result=fail err="dial tcp 172.19.0.2:5678: connect: connection refused"
+server    | Traceback (most recent call last):
+server    |   File "//src/main.py", line 5, in <module>
+server    |     import server
+server    |   File "/src/server/__init__.py", line 1, in <module>
+server    |     from .server import Server
+server    |   File "/src/server/server.py", line 5, in <module>
+server    |     import bet
+server    | ModuleNotFoundError: No module named 'bet'
+client_4  | 2026/09/05 21:34:03 INFO action=connect-to-server result=in-progress
+client_4  | 2026/09/05 21:34:03 WARN action=connect-to-server result=fail attempt=0
+client_4  | 2026/09/05 21:34:03 WARN action=connect-to-server result=fail attempt=1
+client_4  | 2026/09/05 21:34:03 WARN action=connect-to-server result=fail attempt=2
+client_4  | 2026/09/05 21:34:04 WARN action=connect-to-server result=fail
+client_4  | 2026/09/05 21:34:04 ERROR action=client-new result=fail err="dial tcp 172.19.0.2:5678: connect: connection refused"

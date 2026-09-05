@@ -5,18 +5,18 @@ type Bet struct {
 	AgencyId int
 	Name	 string
 	LastName string
-	Documentation	int
+	Document	int
 	Birthday string
 	Number   int
 }
 
 
-func NewBet(agencyId int, name string, lastName string, documentation int, birthday string, number int) *Bet {
+func NewBet(agencyId int, name string, lastName string, document int, birthday string, number int) *Bet {
 	return &Bet{
 		AgencyId: agencyId,
 		Name:     name,
 		LastName: lastName,
-		Documentation: documentation,
+		Document: document,
 		Birthday: birthday,
 		Number:   number,
 	}
