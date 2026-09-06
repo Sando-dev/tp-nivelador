@@ -7,6 +7,7 @@ import (
 	"io"
 	"encoding/csv"
 	"strconv"
+	"fmt"
 
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/logger"
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/safe_socket"
@@ -14,12 +15,9 @@ import (
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/protocol"
 )
 
-const CONNECTION_ATTEMPTS_MAX = 3
-const CONNECTION_ATTEMPS_DELAY_MS = 200
+const CONNECTION_ATTEMPTS_MAX = 20
+const CONNECTION_ATTEMPS_DELAY_MS = 500
 
-const ECHO_CLIENT_BUFFER_SIZE = 512
-const ECHO_CLIENT_MESSAGE_AMOUNT = 3
-const ECHO_CLIENT_MESSAGE_DELAY_MS = 1000
 
 type ClientConfig struct {
 	ServerHost string
@@ -27,6 +25,7 @@ type ClientConfig struct {
 	AgencyId   int
 	InputFile  string
 	OutputFile string
+	BatchSize  int
 }
 
 type Client struct {
@@ -88,9 +87,13 @@ func (client *Client) Run() error {
 	writer := csv.NewWriter(outputFile)
 	defer writer.Flush()
 
-	if err := client.sendBets(reader); err != nil {
+	if err := client.sendBetsInBatches(reader, client.config.BatchSize); err != nil {
 		return err
 	}
+
+	// if err := client.sendBets(reader); err != nil {
+	// 	return err
+	// }
 
 	if err := safe_socket.SendAll(
 		client.conn,
@@ -140,6 +143,65 @@ func (client *Client) sendBets(reader *csv.Reader) error {
 	}
 }
 
+func (client *Client) sendBetsInBatches(reader *csv.Reader, batchSize int) error {
+	batch := make([]*bet.Bet, 0, batchSize)
+
+	for {
+		row, err := reader.Read()
+
+		if err == io.EOF {
+			if len(batch) > 0 {
+				if err := client.sendBatch(batch); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+
+		if err != nil {
+			return err
+		}
+
+		newBet, err := client.betFromRow(row)
+		if err != nil {
+			return err
+		}
+
+		batch = append(batch, newBet)
+
+		if len(batch) == batchSize {
+			if err := client.sendBatch(batch); err != nil {
+				return err
+			}
+			batch = batch[:0]
+		}
+	}
+}
+
+func (client *Client) sendBatch(batch []*bet.Bet) error {
+	packet := protocol.SerializeBatch(batch)
+
+	if err := safe_socket.SendAll(client.conn, packet); err != nil {
+		return err
+	}
+
+	messageType, _, err := protocol.ReceiveMessage(client.conn)
+	if err != nil {
+		return err
+	}
+
+	switch messageType {
+	case protocol.MessageBatch_Ok:
+		return nil
+
+	case protocol.MessageBatch_Error:
+		return fmt.Errorf("server failed to process batch")
+
+	default:
+		return fmt.Errorf("unexpected response type: %d", messageType)
+	}
+}
+
 
 func (client *Client) betFromRow(row []string) (*bet.Bet, error) {
 	documentation, err := strconv.Atoi(row[2])
@@ -184,10 +246,9 @@ func (client *Client) receiveWinners(writer *csv.Writer) error {
 		}
 
 		if err := writer.Write([]string{
-			strconv.Itoa(winner.AgencyId),
 			winner.Name,
 			winner.LastName,
-			strconv.Itoa(winner.Documentation),
+			strconv.Itoa(winner.Document),
 			winner.Birthday,
 			strconv.Itoa(winner.Number),
 		}); err != nil {

@@ -14,6 +14,9 @@ const (
 	MessageBet MessageType = iota + 1
 	MessageFinish
 	MessageWinners
+	MessageBatch
+	MessageBatch_Ok
+	MessageBatch_Error
 )
 
 
@@ -29,15 +32,10 @@ const (
 )
 
 func SerializeBet(b *bet.Bet) []byte {
-	packet := make([]byte, 0)
-	packet = append(packet, SerializeField(FieldAgencyID, SerializeInt32(b.AgencyId))...)
-	packet = append(packet, SerializeField(FieldName, []byte(b.Name))...)
-	packet = append(packet, SerializeField(FieldLastName, []byte(b.LastName))...)
-	packet = append(packet, SerializeField(FieldDocument, SerializeInt32(b.Document))...)
-	packet = append(packet, SerializeField(FieldBirthdate, []byte(b.Birthday))...)
-	packet = append(packet, SerializeField(FieldNumber, SerializeInt32(b.Number))...)
-
-	return SerializeMessage(MessageBet, packet)
+	return SerializeMessage(
+		MessageBet,
+		SerializeBetPayload(b),
+	)
 }
 
 func SerializeField(fieldType FieldType, value []byte) []byte {
@@ -127,14 +125,16 @@ func DeserializeBet(payload []byte) (*bet.Bet, error) {
 
 	for len(payload) > 0 {
 		if len(payload) < 3 {
-			return nil, fmt.Errorf("invalid payload length")
+			return nil, fmt.Errorf("invalid TLV header")
 		}
 
 		fieldType := FieldType(payload[0])
-		payload = payload[1:]
 
-		fieldLength := int(payload[0])<<8 | int(payload[1])
-		payload = payload[2:]
+		fieldLength :=
+			int(payload[1])<<8 |
+			int(payload[2])
+
+		payload = payload[3:]
 
 		if len(payload) < fieldLength {
 			return nil, fmt.Errorf("invalid field length")
@@ -145,15 +145,11 @@ func DeserializeBet(payload []byte) (*bet.Bet, error) {
 
 		switch fieldType {
 		case FieldAgencyID:
-			if fieldLength != 4 {
-				return nil, fmt.Errorf("invalid agency ID length")
+			var err error
+			agencyId, err = DeserializeInt32(value)
+			if err != nil {
+				return nil, err
 			}
-
-			agencyId =
-				int(value[0])<<24 |
-				int(value[1])<<16 |
-				int(value[2])<<8 |
-				int(value[3])
 
 		case FieldName:
 			name = string(value)
@@ -162,32 +158,24 @@ func DeserializeBet(payload []byte) (*bet.Bet, error) {
 			lastName = string(value)
 
 		case FieldDocument:
-			if fieldLength != 4 {
-				return nil, fmt.Errorf("invalid document length")
+			var err error
+			document, err = DeserializeInt32(value)
+			if err != nil {
+				return nil, err
 			}
-
-			document =
-				int(value[0])<<24 |
-				int(value[1])<<16 |
-				int(value[2])<<8 |
-				int(value[3])
 
 		case FieldBirthdate:
 			birthday = string(value)
 
 		case FieldNumber:
-			if fieldLength != 4 {
-				return nil, fmt.Errorf("invalid number length")
+			var err error
+			number, err = DeserializeInt32(value)
+			if err != nil {
+				return nil, err
 			}
 
-			number =
-				int(value[0])<<24 |
-				int(value[1])<<16 |
-				int(value[2])<<8 |
-				int(value[3])
-
 		default:
-			return nil, fmt.Errorf("invalid field type")
+			return nil, fmt.Errorf("invalid field type: %d", fieldType)
 		}
 	}
 
@@ -199,4 +187,46 @@ func DeserializeBet(payload []byte) (*bet.Bet, error) {
 		birthday,
 		number,
 	), nil
+}
+
+func SerializeBatch(bets []*bet.Bet) []byte {
+	payload := make([]byte, 0)
+
+	for _, b := range bets {
+		betPayload := SerializeBetPayload(b)
+
+		length := len(betPayload)
+
+		payload = append(payload,
+			byte(length>>8),
+			byte(length),
+		)
+
+		payload = append(payload, betPayload...)
+	}
+
+	return SerializeMessage(MessageBatch, payload)
+}
+
+
+func SerializeBetPayload(b *bet.Bet) []byte {
+	packet := make([]byte, 0)
+	packet = append(packet, SerializeField(FieldAgencyID, SerializeInt32(b.AgencyId))...)
+	packet = append(packet, SerializeField(FieldName, []byte(b.Name))...)
+	packet = append(packet, SerializeField(FieldLastName, []byte(b.LastName))...)
+	packet = append(packet, SerializeField(FieldDocument, SerializeInt32(b.Document))...)
+	packet = append(packet, SerializeField(FieldBirthdate, []byte(b.Birthday))...)
+	packet = append(packet, SerializeField(FieldNumber, SerializeInt32(b.Number))...)
+	return packet
+}
+
+func DeserializeInt32(value []byte) (int, error) {
+	if len(value) != 4 {
+		return 0, fmt.Errorf("invalid int32 length")
+	}
+
+	return int(value[0])<<24 |
+		int(value[1])<<16 |
+		int(value[2])<<8 |
+		int(value[3]), nil
 }
