@@ -7,11 +7,12 @@ import server
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
 SERVER_AGENCY_QUORUM_MIN = int(os.environ["AGENCY_QUORUM_MIN"])
+STORAGE_PATH = os.getenv("STORAGE_PATH", "./storage")
 
 
 def main():
     logger.init()
-    s = server.Server(SERVER_HOST, SERVER_PORT, SERVER_AGENCY_QUORUM_MIN)
+    s = server.Server(SERVER_HOST, SERVER_PORT, SERVER_AGENCY_QUORUM_MIN, STORAGE_PATH)
     try:
         s.run()
     except Exception as e:

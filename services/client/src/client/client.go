@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"strconv"
 	"time"
-	"os"
 
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/bet"
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/logger"
@@ -15,7 +15,7 @@ import (
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/safe_socket"
 )
 
-const CONNECTION_ATTEMPTS_MAX = 20
+const CONNECTION_ATTEMPTS_MAX = 5
 const CONNECTION_ATTEMPS_DELAY_MS = 500
 
 type ClientConfig struct {
@@ -100,7 +100,6 @@ func connectToServer(
 
 	return nil, lastErr
 }
-
 
 func (client *Client) Run() error {
 	const mainAction = "test-echo-server"

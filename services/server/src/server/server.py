@@ -5,13 +5,15 @@ from protocol import protocol
 from lottery import Bet, Lottery
 import threading
 import signal
+import os
 
 
 class Server:
-    def __init__(self, server_host: str, server_port: int, server_agency_quorum_min: int) -> None:
+    def __init__(self, server_host: str, server_port: int, server_agency_quorum_min: int, storage_path: str) -> None:
         self.server_host = server_host
         self.server_port = server_port
         self.server_agency_quorum_min = server_agency_quorum_min
+        self.storage_path = storage_path
         self.finished_agencies = set()
         self.condition = threading.Condition()
         self.bets_lock = threading.Lock()
@@ -22,7 +24,6 @@ class Server:
 
     def _handle_client(self, client_socket):
         action = "handle-client"
-        lottery_instance = Lottery("bets.csv")
         message_amount = 0
         client_agency_id = None
 
@@ -38,16 +39,17 @@ class Server:
                     try:
                         current_bets = protocol.deserialize_batch(payload)
 
-                        if current_bets:
-                            batch_agency_id = current_bets[0].agency_id
-                            
-                            if client_agency_id is None:
-                                client_agency_id = batch_agency_id
+                        if not current_bets:
+                            raise ValueError("empty batch")
 
-                            elif client_agency_id != batch_agency_id:
-                                raise ValueError(
-                                    "agency changed during connection"
-                                )
+                        batch_agency_id = current_bets[0].agency_id
+
+                        if client_agency_id is None:
+                            client_agency_id = batch_agency_id
+                        elif client_agency_id != batch_agency_id:
+                            raise ValueError("agency changed during connection")
+
+                        lottery_instance = self._get_lottery(client_agency_id)
 
                         with self.bets_lock:
                             lottery_instance.store_bets(current_bets)
@@ -57,12 +59,6 @@ class Server:
                         safe_socket.send_all(client_socket, response)
 
                     except Exception as e:
-                        print(
-                            f"BATCH_ERROR agency={client_agency_id} "
-                            f"error={repr(e)}",
-                            flush=True,
-                        )
-
                         response = protocol.serialize_batch_error()
                         safe_socket.send_all(client_socket, response)
 
@@ -82,41 +78,28 @@ class Server:
                         if self.shutdown_event.is_set():
                             return
 
-                    with self.bets_lock:
-                        bets = list(lottery_instance.load_bets())
+                    lottery_instance = self._get_lottery(client_agency_id)
 
-                    agency_bets = [
-                        bet for bet in bets
-                        if bet.agency_id == client_agency_id
-                    ]
+                    with self.bets_lock:
+                        agency_bets = list(lottery_instance.load_bets())
 
                     winners = [
                         bet for bet in agency_bets
                         if lottery_instance.has_won(bet)
                     ]
 
-                    print(
-                        f"AGENCY={client_agency_id} "
-                        f"BETS={len(agency_bets)} "
-                        f"WINNERS={len(winners)}"
-                    )
+                    for bet in winners:
+                        payload = protocol.serialize_bet(bet)
 
-                    for bet in bets:
-                        if (
-                            bet.agency_id == client_agency_id
-                            and lottery_instance.has_won(bet)
-                        ):
-                            payload = protocol.serialize_bet(bet)
+                        message = protocol.serialize_message(
+                            protocol.MessageType.WINNER,
+                            payload,
+                        )
 
-                            message = protocol.serialize_message(
-                                protocol.MessageType.WINNER,
-                                payload,
-                            )
-
-                            safe_socket.send_all(
-                                client_socket,
-                                message,
-                            )
+                        safe_socket.send_all(
+                            client_socket,
+                            message,
+                        )
 
                     finish_message = protocol.serialize_message(
                         protocol.MessageType.FINISH,
@@ -155,8 +138,11 @@ class Server:
         action = "accept-connection"
         signal.signal(signal.SIGTERM, self._signal_handler)
 
-        with open("bets.csv", "w"):
-            pass
+        os.makedirs(self.storage_path, exist_ok=True)
+
+        for filename in os.listdir(self.storage_path):
+            if filename.startswith("agency_") and filename.endswith(".csv"):
+                os.remove(os.path.join(self.storage_path, filename))
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
 
@@ -193,3 +179,11 @@ class Server:
 
         if self.server_socket is not None:
             self.server_socket.close()
+
+    def _get_lottery(self, agency_id):
+        file_path = os.path.join(
+            self.storage_path,
+            f"agency_{agency_id}.csv",
+        )
+
+        return Lottery(file_path)

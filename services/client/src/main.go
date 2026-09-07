@@ -3,8 +3,8 @@ package main
 import (
 	"errors"
 	"os"
-	"strconv"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	client "github.com/7574-sistemas-distribuidos/tp-nivelador/src/client"
@@ -53,7 +53,6 @@ func loadConfig() (client.ClientConfig, error) {
 			"BATCH_SIZE must be a positive integer",
 		)
 	}
-	
 
 	return client.ClientConfig{
 		ServerHost: serverHost,

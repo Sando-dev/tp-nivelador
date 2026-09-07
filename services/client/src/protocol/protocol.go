@@ -1,8 +1,8 @@
 package protocol
 
 import (
-	"net"
 	"fmt"
+	"net"
 
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/bet"
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/safe_socket"
@@ -18,7 +18,6 @@ const (
 	MessageBatch_Ok
 	MessageBatch_Error
 )
-
 
 type FieldType byte
 
@@ -50,7 +49,6 @@ func SerializeField(fieldType FieldType, value []byte) []byte {
 	return packet
 }
 
-
 func SerializeInt16(value int) []byte {
 	return []byte{
 		byte(value >> 8),
@@ -67,8 +65,6 @@ func SerializeInt32(value int) []byte {
 	}
 }
 
-
-
 func SerializeMessage(messageType MessageType, payload []byte) []byte {
 	packet := make([]byte, 0)
 	packet = append(packet, byte(messageType))
@@ -82,12 +78,9 @@ func SerializeMessage(messageType MessageType, payload []byte) []byte {
 	return packet
 }
 
-
-
 func SerializeFinish() []byte {
 	return SerializeMessage(MessageFinish, nil)
 }
-
 
 func ReceiveMessage(conn net.Conn) (MessageType, []byte, error) {
 	messageTypeBytes, err := safe_socket.RecvAll(conn, 1)
@@ -102,7 +95,7 @@ func ReceiveMessage(conn net.Conn) (MessageType, []byte, error) {
 
 	payloadLength :=
 		int(payloadLengthBytes[0])<<8 |
-		int(payloadLengthBytes[1])
+			int(payloadLengthBytes[1])
 
 	payload, err := safe_socket.RecvAll(conn, payloadLength)
 	if err != nil {
@@ -113,7 +106,6 @@ func ReceiveMessage(conn net.Conn) (MessageType, []byte, error) {
 
 	return messageType, payload, nil
 }
-
 
 func DeserializeBet(payload []byte) (*bet.Bet, error) {
 	var agencyId int
@@ -132,7 +124,7 @@ func DeserializeBet(payload []byte) (*bet.Bet, error) {
 
 		fieldLength :=
 			int(payload[1])<<8 |
-			int(payload[2])
+				int(payload[2])
 
 		payload = payload[3:]
 
@@ -207,7 +199,6 @@ func SerializeBatch(bets []*bet.Bet) []byte {
 
 	return SerializeMessage(MessageBatch, payload)
 }
-
 
 func SerializeBetPayload(b *bet.Bet) []byte {
 	packet := make([]byte, 0)

@@ -1,15 +1,13 @@
 package bet
 
-
 type Bet struct {
 	AgencyId int
-	Name	 string
+	Name     string
 	LastName string
-	Document	int
+	Document int
 	Birthday string
 	Number   int
 }
-
 
 func NewBet(agencyId int, name string, lastName string, document int, birthday string, number int) *Bet {
 	return &Bet{
