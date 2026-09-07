@@ -6,17 +6,18 @@ import "io"
 
 func ShortWrite(socket io.Writer, bytes []byte) error {
 	sent := 0
+
 	for sent < len(bytes) {
 		n, err := socket.Write(bytes[sent:])
+
 		if err != nil {
 			return err
 		}
-		if n == 0 {
-			return io.ErrUnexpectedEOF
-		}
+
 		sent += n
-	}	
-	return  nil
+	}
+
+	return nil
 }
 
 func ShortRead(socket io.Reader, size int) ([]byte, error) {

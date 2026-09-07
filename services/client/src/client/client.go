@@ -1,23 +1,22 @@
 package client
 
 import (
+	"encoding/csv"
+	"fmt"
+	"io"
 	"net"
+	"strconv"
 	"time"
 	"os"
-	"io"
-	"encoding/csv"
-	"strconv"
-	"fmt"
 
-	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/logger"
-	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/safe_socket"
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/bet"
+	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/logger"
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/protocol"
+	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/safe_socket"
 )
 
 const CONNECTION_ATTEMPTS_MAX = 20
 const CONNECTION_ATTEMPS_DELAY_MS = 500
-
 
 type ClientConfig struct {
 	ServerHost string
@@ -29,56 +28,110 @@ type ClientConfig struct {
 }
 
 type Client struct {
-	conn   net.Conn
-	config ClientConfig
+	conn     net.Conn
+	config   ClientConfig
+	shutdown <-chan struct{}
 }
 
-func NewClient(config ClientConfig) (*Client, error) {
-	conn, err := connectToServer(config.ServerHost, config.ServerPort)
+func NewClient(
+	config ClientConfig,
+	shutdown <-chan struct{},
+) (*Client, error) {
+
+	conn, err := connectToServer(
+		config.ServerHost,
+		config.ServerPort,
+		shutdown,
+	)
 	if err != nil {
-		logger.Warn("connect-to-server", logger.Fail)
 		return nil, err
 	}
 
-	client := &Client{conn: conn, config: config}
-	return client, nil
+	return &Client{
+		conn:     conn,
+		config:   config,
+		shutdown: shutdown,
+	}, nil
 }
 
-func connectToServer(host, port string) (net.Conn, error) {
-	const action = "connect-to-server"
-	var err error
-	var conn net.Conn
+func connectToServer(
+	host string,
+	port string,
+	shutdown <-chan struct{},
+) (net.Conn, error) {
 
+	const action = "connect-to-server"
 	logger.Info(action, logger.InProgress)
-	for i := range CONNECTION_ATTEMPTS_MAX {
-		conn, err = net.Dial("tcp", host+":"+port)
-		if err != nil {
-			logger.Warn(action, logger.Fail, "attempt", i)
-			time.Sleep(CONNECTION_ATTEMPS_DELAY_MS * time.Millisecond)
-			continue
+
+	var lastErr error
+
+	for i := 0; i < CONNECTION_ATTEMPTS_MAX; i++ {
+
+		select {
+		case <-shutdown:
+			return nil, nil
+		default:
 		}
 
-		logger.Info(action, logger.Success)
-		break
+		conn, err := net.Dial("tcp", host+":"+port)
+		if err == nil {
+			logger.Info(action, logger.Success)
+			return conn, nil
+		}
+
+		lastErr = err
+
+		logger.Warn(
+			action,
+			logger.Fail,
+			"attempt",
+			i,
+		)
+
+		select {
+		case <-shutdown:
+			return nil, nil
+
+		case <-time.After(
+			CONNECTION_ATTEMPS_DELAY_MS * time.Millisecond,
+		):
+		}
 	}
 
-	return conn, err
+	return nil, lastErr
 }
+
 
 func (client *Client) Run() error {
 	const mainAction = "test-echo-server"
+
+	if client.conn == nil {
+		return nil
+	}
+
+	// Si llega SIGTERM mientras estamos bloqueados en Read/Write,
+	// cerramos el socket para desbloquear la operación.
+	go func() {
+		<-client.shutdown
+		client.conn.Close()
+	}()
+
 	defer client.conn.Close()
 
 	inputFile, err := os.Open(client.config.InputFile)
 	if err != nil {
-		logger.Error(mainAction, logger.Fail, "agency-id", client.config.AgencyId)
+		if client.isShuttingDown() {
+			return nil
+		}
 		return err
 	}
 	defer inputFile.Close()
 
 	outputFile, err := os.Create(client.config.OutputFile)
 	if err != nil {
-		logger.Error(mainAction, logger.Fail, "agency-id", client.config.AgencyId)
+		if client.isShuttingDown() {
+			return nil
+		}
 		return err
 	}
 	defer outputFile.Close()
@@ -87,22 +140,34 @@ func (client *Client) Run() error {
 	writer := csv.NewWriter(outputFile)
 	defer writer.Flush()
 
-	if err := client.sendBetsInBatches(reader, client.config.BatchSize); err != nil {
+	if err := client.sendBetsInBatches(
+		reader,
+		client.config.BatchSize,
+	); err != nil {
+		if client.isShuttingDown() {
+			return nil
+		}
 		return err
 	}
 
-	// if err := client.sendBets(reader); err != nil {
-	// 	return err
-	// }
+	if client.isShuttingDown() {
+		return nil
+	}
 
 	if err := safe_socket.SendAll(
 		client.conn,
 		protocol.SerializeFinish(),
 	); err != nil {
+		if client.isShuttingDown() {
+			return nil
+		}
 		return err
 	}
 
 	if err := client.receiveWinners(writer); err != nil {
+		if client.isShuttingDown() {
+			return nil
+		}
 		return err
 	}
 
@@ -113,40 +178,30 @@ func (client *Client) Run() error {
 		client.config.AgencyId,
 	)
 
-
 	return nil
 }
 
-
-func (client *Client) sendBets(reader *csv.Reader) error {
-	for {
-		row, err := reader.Read()
-
-		if err == io.EOF {
-			return nil
-		}
-
-		if err != nil {
-			return err
-		}
-
-		newBet, err := client.betFromRow(row)
-		if err != nil {
-			return err
-		}
-
-		packet := protocol.SerializeBet(newBet)
-
-		if err := safe_socket.SendAll(client.conn, packet); err != nil {
-			return err
-		}
+func (client *Client) isShuttingDown() bool {
+	select {
+	case <-client.shutdown:
+		return true
+	default:
+		return false
 	}
 }
 
-func (client *Client) sendBetsInBatches(reader *csv.Reader, batchSize int) error {
+func (client *Client) sendBetsInBatches(
+	reader *csv.Reader,
+	batchSize int,
+) error {
+
 	batch := make([]*bet.Bet, 0, batchSize)
 
 	for {
+		if client.isShuttingDown() {
+			return nil
+		}
+
 		row, err := reader.Read()
 
 		if err == io.EOF {
@@ -173,6 +228,7 @@ func (client *Client) sendBetsInBatches(reader *csv.Reader, batchSize int) error
 			if err := client.sendBatch(batch); err != nil {
 				return err
 			}
+
 			batch = batch[:0]
 		}
 	}
@@ -190,20 +246,21 @@ func (client *Client) sendBatch(batch []*bet.Bet) error {
 		return err
 	}
 
-	switch messageType {
-	case protocol.MessageBatch_Ok:
+	if messageType == protocol.MessageBatch_Ok {
 		return nil
-
-	case protocol.MessageBatch_Error:
-		return fmt.Errorf("server failed to process batch")
-
-	default:
-		return fmt.Errorf("unexpected response type: %d", messageType)
 	}
+
+	if messageType == protocol.MessageBatch_Error {
+		return fmt.Errorf("server failed to process batch")
+	}
+
+	return fmt.Errorf("unexpected response type: %d", messageType)
 }
 
+func (client *Client) betFromRow(
+	row []string,
+) (*bet.Bet, error) {
 
-func (client *Client) betFromRow(row []string) (*bet.Bet, error) {
 	documentation, err := strconv.Atoi(row[2])
 	if err != nil {
 		return nil, err
@@ -224,10 +281,18 @@ func (client *Client) betFromRow(row []string) (*bet.Bet, error) {
 	), nil
 }
 
+func (client *Client) receiveWinners(
+	writer *csv.Writer,
+) error {
 
-func (client *Client) receiveWinners(writer *csv.Writer) error {
 	for {
-		messageType, payload, err := protocol.ReceiveMessage(client.conn)
+		if client.isShuttingDown() {
+			return nil
+		}
+
+		messageType, payload, err :=
+			protocol.ReceiveMessage(client.conn)
+
 		if err != nil {
 			return err
 		}

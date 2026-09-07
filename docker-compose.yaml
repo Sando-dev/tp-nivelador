@@ -11,6 +11,7 @@ services:
       - SERVER_HOST=server
       - SERVER_PORT=5678
       - STORAGE_PATH=./storage
+      - AGENCY_QUORUM_MIN=3
 
   client_0:
     volumes:
@@ -28,7 +29,7 @@ services:
       - SERVER_PORT=5678
       - INPUT_FILE=/input/input-0.csv
       - OUTPUT_FILE=/output/output_0.csv
-      - BATCH_SIZE=5
+      - BATCH_SIZE=32
   
   client_1:
     volumes:
@@ -46,7 +47,7 @@ services:
       - SERVER_PORT=5678
       - INPUT_FILE=/input/input-1.csv
       - OUTPUT_FILE=/output/output_1.csv
-      - BATCH_SIZE=5
+      - BATCH_SIZE=32
 
   client_2:
     volumes:
@@ -64,7 +65,7 @@ services:
       - SERVER_PORT=5678
       - INPUT_FILE=/input/input-2.csv
       - OUTPUT_FILE=/output/output_2.csv
-      - BATCH_SIZE=5
+      - BATCH_SIZE=32
 
   client_3:
     volumes:
@@ -82,7 +83,7 @@ services:
       - SERVER_PORT=5678
       - INPUT_FILE=/input/input-3.csv
       - OUTPUT_FILE=/output/output_3.csv
-      - BATCH_SIZE=5
+      - BATCH_SIZE=32
 
   client_4:
     volumes:
@@ -100,7 +101,7 @@ services:
       - SERVER_PORT=5678
       - INPUT_FILE=/input/input-4.csv
       - OUTPUT_FILE=/output/output_4.csv
-      - BATCH_SIZE=5
+      - BATCH_SIZE=32
 
   client_5:
     volumes:
@@ -118,5 +119,5 @@ services:
       - SERVER_PORT=5678
       - INPUT_FILE=/input/input-5.csv
       - OUTPUT_FILE=/output/output_5.csv
-      - BATCH_SIZE=5
+      - BATCH_SIZE=32
       

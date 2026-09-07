@@ -20,19 +20,34 @@ class FieldType(Enum):
     NUMBER = 6
 
 
-def receive_message(client_socket) -> (MessageType, bytes):
+def receive_message(client_socket):
     message_type = safe_socket.recv_all(client_socket, 1)
 
-    payload_length_bytes = safe_socket.recv_all(client_socket, 2)
-    payload_length = int.from_bytes(payload_length_bytes, "big")
+    if not message_type:
+        raise ConnectionError("client closed connection")
 
-    payload = safe_socket.recv_all(client_socket, payload_length)
+    payload_length_bytes = safe_socket.recv_all(client_socket, 2)
+
+    if len(payload_length_bytes) < 2:
+        raise ConnectionError("connection closed while reading message length")
+
+    payload_length = int.from_bytes(
+        payload_length_bytes,
+        "big",
+    )
+
+    payload = safe_socket.recv_all(
+        client_socket,
+        payload_length,
+    )
+
+    if len(payload) < payload_length:
+        raise ConnectionError("connection closed while reading payload")
 
     return MessageType(message_type[0]), payload
 
 
-
-def deserialize_bet(payload) -> bet.Bet:
+def deserialize_bet(payload) -> Bet:
     offset = 0
     fields = {}
     while offset < len(payload):
@@ -70,7 +85,7 @@ def serialize_field(field_type: FieldType, value: bytes) -> bytes:
     return packet
 
 
-def serialize_bet(bet: bet.Bet) -> bytes:
+def serialize_bet(bet: Bet) -> bytes:
     payload = bytearray()
 
     payload.extend(serialize_field(FieldType.AGENCY_ID, bet.agency_id.to_bytes(4, "big")))
