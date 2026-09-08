@@ -2,23 +2,21 @@
 
 ## Protocolo de Comunicación
 
-Se definió un protocolo propio sobre TCP. Cada mensaje comienza con un encabezado compuesto por 1 byte para identificar el tipo de mensaje, 2 bytes en Big Endian para indicar la longitud del payload y un payload de longitud variable.
+Para la comunicación entre los clientes y el servidor se implementó un protocolo propio sobre TCP. Cada mensaje comienza con un encabezado que indica el tipo de mensaje y el tamaño del payload. Para esto se usa 1 byte para el tipo de mensaje y 2 bytes en Big Endian para la longitud del payload.
 
-La serialización de cada apuesta utiliza un esquema TLV (Type-Length-Value). Cada campo se representa mediante: Tipo de campo, longitud del valor y el valor serializado.
+Para serializar cada apuesta se utilizó un esquema TLV (Type-Length-Value). De esta forma, cada campo se envía indicando primero qué tipo de campo es, luego su longitud y finalmente su valor. Esto permite reconstruir del otro lado datos como la agencia, nombre, apellido, documento, fecha de nacimiento y número apostado.
 
-De esta forma se pueden identificar y deserializar de manera independiente campos como el identificador de agencia, nombre, apellido, documento, fecha de nacimiento y número apostado.
+Las apuestas no se envían de a una, sino agrupadas en batches para reducir la cantidad de mensajes. Cada batch contiene varias apuestas y cada una está precedida por su longitud, lo que permite separarlas correctamente al recibirlas. La cantidad de apuestas por batch se configura mediante BATCH_SIZE.
 
-Para reducir la cantidad de mensajes enviados, las apuestas se agrupan en batches. Cada mensaje BATCH contiene varias apuestas, y cada una se encuentra precedida por su longitud para permitir su correcta separación al deserializar. La cantidad de apuestas por batch se configura mediante BATCH_SIZE.
-
-El servidor responde con BATCH_OK únicamente cuando todas las apuestas del lote fueron procesadas correctamente. En caso contrario responde con BATCH_ERROR. Una vez enviadas todas las apuestas, el cliente envía un mensaje FINISH y el servidor retorna los ganadores mediante mensajes WINNER, finalizando luego también con FINISH.
+Cuando el servidor procesa correctamente todas las apuestas de un batch responde con BATCH_OK. Si ocurre algún error responde con BATCH_ERROR. Cuando el cliente termina de enviar todas sus apuestas manda un mensaje FINISH. Luego el servidor devuelve los ganadores mediante mensajes WINNER y finalmente envía otro FINISH para indicar que terminó la respuesta.
 
 
 ## Concurrencia y sincronización
 
-El servidor utiliza un modelo multithreading, creando un thread independiente para atender cada conexión de cliente. Esto permite procesar simultáneamente las apuestas de distintas agencias.
+El servidor fue implementado usando multithreading. Cada vez que se conecta un cliente se crea un thread independiente para atenderlo, por lo que varias agencias pueden enviar y procesar apuestas al mismo tiempo.
 
-Para proteger recursos compartidos se utilizan mecanismos de sincronización. El acceso al almacenamiento de apuestas se protege mediante un Lock, evitando escrituras o lecturas concurrentes inconsistentes.
+Como hay información compartida entre distintos threads, se utilizan mecanismos de sincronización. El acceso al almacenamiento de apuestas se protege con un Lock, evitando que dos threads lean o escriban al mismo tiempo de forma inconsistente.
 
-Además, se utiliza una Condition para implementar el quorum de agencias. Cuando una agencia finaliza el envío de sus apuestas, su identificador se agrega a un conjunto de agencias finalizadas. Los threads esperan sobre la condición hasta que la cantidad de agencias finalizadas alcanza AGENCY_QUORUM_MIN. Cada nueva agencia que termina notifica al resto de los threads para que vuelvan a verificar la condición.
+También se utiliza una Condition para manejar el quorum de agencias. Cuando una agencia termina de enviar sus apuestas, se agrega su identificador al conjunto de agencias finalizadas. Los threads esperan hasta que la cantidad de agencias terminadas alcanza el valor de AGENCY_QUORUM_MIN. Cada vez que una nueva agencia termina, se notifica a los threads que están esperando para que vuelvan a comprobar si ya se alcanzó el quorum.
 
-Una vez alcanzado el quorum, cada cliente recibe únicamente los ganadores correspondientes a su propia agencia.
+Una vez alcanzado el quorum, cada cliente recibe solamente los ganadores que corresponden a su propia agencia.
