@@ -1,9 +1,5 @@
 import socket
 
-# TODO: Complete with a short-read/short-write tolerant implementation
-
-
-
 
 def short_read(socket: socket.socket, size):
     data = b""
