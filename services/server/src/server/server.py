@@ -20,12 +20,15 @@ class Server:
         self.shutdown_event = threading.Event()
         self.client_threads = []
         self.server_socket = None
+        self.bets_file = os.path.join(self.storage_path, "bets.csv")
 
 
     def _handle_client(self, client_socket):
         action = "handle-client"
         message_amount = 0
         client_agency_id = None
+
+        lottery_instance = Lottery(self.bets_file)
 
         try:
             logger.info(action, logger.LogResult.in_progress)
@@ -49,7 +52,6 @@ class Server:
                         elif client_agency_id != batch_agency_id:
                             raise ValueError("agency changed during connection")
 
-                        lottery_instance = self._get_lottery(client_agency_id)
 
                         with self.bets_lock:
                             lottery_instance.store_bets(current_bets)
@@ -59,6 +61,11 @@ class Server:
                         safe_socket.send_all(client_socket, response)
 
                     except Exception as e:
+                        print(
+                            f"BATCH_ERROR agency={client_agency_id}: {repr(e)}",
+                            flush=True,
+                        )
+
                         response = protocol.serialize_batch_error()
                         safe_socket.send_all(client_socket, response)
 
@@ -78,14 +85,15 @@ class Server:
                         if self.shutdown_event.is_set():
                             return
 
-                    lottery_instance = self._get_lottery(client_agency_id)
-
                     with self.bets_lock:
-                        agency_bets = list(lottery_instance.load_bets())
+                        bets = list(lottery_instance.load_bets())
 
                     winners = [
-                        bet for bet in agency_bets
-                        if lottery_instance.has_won(bet)
+                        bet for bet in bets
+                        if (
+                            bet.agency_id == client_agency_id
+                            and lottery_instance.has_won(bet)
+                        )
                     ]
 
                     for bet in winners:
@@ -140,9 +148,8 @@ class Server:
 
         os.makedirs(self.storage_path, exist_ok=True)
 
-        for filename in os.listdir(self.storage_path):
-            if filename.startswith("agency_") and filename.endswith(".csv"):
-                os.remove(os.path.join(self.storage_path, filename))
+        with open(self.bets_file, "w"):
+            pass
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
 
@@ -179,11 +186,3 @@ class Server:
 
         if self.server_socket is not None:
             self.server_socket.close()
-
-    def _get_lottery(self, agency_id):
-        file_path = os.path.join(
-            self.storage_path,
-            f"agency_{agency_id}.csv",
-        )
-
-        return Lottery(file_path)
